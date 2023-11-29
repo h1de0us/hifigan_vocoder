@@ -1,0 +1,5 @@
+defaults:
+- model: hifigan
+- dataset: ljspeech
+- optimizer: adam
+- scheduler: onecycle
