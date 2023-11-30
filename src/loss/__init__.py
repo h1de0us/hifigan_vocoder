@@ -1,4 +1,4 @@
-from HiFiGANLoss import GeneratorLoss, DiscriminatorLoss
+from src.loss.HiFiGANLoss import GeneratorLoss, DiscriminatorLoss
 __all__ = [
     "GeneratorLoss",
     "DiscriminatorLoss"

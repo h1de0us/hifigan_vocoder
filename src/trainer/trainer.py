@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 from src.base import BaseTrainer
 from src.logger.utils import plot_spectrogram_to_buf
-from src.metric.utils import calc_cer, calc_wer
 from src.utils import inf_loop, MetricTracker
 
 
@@ -24,17 +23,26 @@ class Trainer(BaseTrainer):
     def __init__(
             self,
             model,
-            criterion,
-            metrics,
-            optimizer,
+            generator_criterion,
+            discriminator_criterion,
+            generator_optimizer,
+            discriminator_optimizer,
             config,
             device,
             dataloaders,
-            lr_scheduler=None,
+            generator_lr_scheduler,
+            discriminator_lr_scheduler,
             len_epoch=None,
             skip_oom=True,
     ):
-        super().__init__(model, criterion, metrics, optimizer, config, device)
+        super().__init__(model, 
+                         generator_criterion, 
+                         discriminator_criterion, 
+                         generator_optimizer, 
+                         discriminator_optimizer,
+                         generator_lr_scheduler,
+                         discriminator_lr_scheduler,
+                         config, device)
         self.skip_oom = skip_oom
         self.config = config
         self.train_dataloader = dataloaders["train"]
@@ -46,14 +54,20 @@ class Trainer(BaseTrainer):
             self.train_dataloader = inf_loop(self.train_dataloader)
             self.len_epoch = len_epoch
         self.evaluation_dataloaders = {k: v for k, v in dataloaders.items() if k != "train"}
-        self.lr_scheduler = lr_scheduler
         self.log_step = 50
 
         self.train_metrics = MetricTracker(
-            "loss", "grad norm", *[m.name for m in self.metrics], writer=self.writer
+            "generator_loss", 
+            "discriminator_loss",
+            "feature_map_loss",
+            "mel_spectrogram_loss",
+            "adversarial_loss",
+            "generator grad norm",
+            "discriminator grad norm",
+            writer=self.writer
         )
         self.evaluation_metrics = MetricTracker(
-            "loss", *[m.name for m in self.metrics], writer=self.writer
+            "loss", writer=self.writer
         )
 
     @staticmethod
@@ -61,7 +75,7 @@ class Trainer(BaseTrainer):
         """
         Move all necessary tensors to the HPU
         """
-        for tensor_for_gpu in ["spectrogram", "text_encoded"]:
+        for tensor_for_gpu in ["spectrogram"]:
             batch[tensor_for_gpu] = batch[tensor_for_gpu].to(device)
         return batch
 
@@ -100,7 +114,8 @@ class Trainer(BaseTrainer):
                     continue
                 else:
                     raise e
-            self.train_metrics.update("grad norm", self.get_grad_norm())
+            self.train_metrics.update("generator grad norm", self.get_grad_norm(type="generator"))
+            self.train_metrics.update("discriminator grad norm", self.get_grad_norm(type="discriminator"))
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
                 self.logger.debug(
@@ -109,9 +124,11 @@ class Trainer(BaseTrainer):
                     )
                 )
                 self.writer.add_scalar(
-                    "learning rate", self.lr_scheduler.get_last_lr()[0]
+                    "generator learning rate", self.generator_lr_scheduler.get_last_lr()[0]
                 )
-                self._log_spectrogram(batch["spectrogram"])
+                self.writer.add_scalar(
+                    "discriminator learning rate", self.discriminator_lr_scheduler.get_last_lr()[0]
+                )
                 self._log_scalars(self.train_metrics)
                 # we don't want to reset train metrics at the start of every epoch
                 # because we are interested in recent train metrics
@@ -121,37 +138,79 @@ class Trainer(BaseTrainer):
                 break
         log = last_train_metrics
 
-        for part, dataloader in self.evaluation_dataloaders.items():
-            val_log = self._evaluation_epoch(epoch, part, dataloader)
-            log.update(**{f"{part}_{name}": value for name, value in val_log.items()})
+        if self.generator_lr_scheduler is not None:
+            self.generator_lr_scheduler.step()
+        if self.discriminator_lr_scheduler is not None:
+            self.discriminator_lr_scheduler.step()
+
+        # TODO: call _evaluation_epoch here
+
+        self._log_audio(name='train.wav', audio=batch["generated_audio"][0], sample_rate=22050)
 
         return log
 
     def process_batch(self, batch, is_train: bool, metrics: MetricTracker):
         batch = self.move_batch_to_device(batch, self.device)
-        if is_train:
-            self.optimizer.zero_grad()
-        outputs = self.model(**batch)
-        if type(outputs) is dict:
-            batch.update(outputs)
+        generated_audio = self.model(**batch)
+        if type(generated_audio) is dict:
+            batch.update(generated_audio)
         else:
-            batch["logits"] = outputs
+            batch["generated_audio"] = generated_audio
 
-        batch["log_probs"] = F.log_softmax(batch["logits"], dim=-1)
-        batch["log_probs_length"] = self.model.transform_input_lengths(
-            batch["spectrogram_length"]
-        )
-        batch["loss"] = self.criterion(**batch)
-        if is_train:
-            batch["loss"].backward()
-            self._clip_grad_norm()
-            self.optimizer.step()
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
+        scales_real, scales_fake, \
+               periods_real, periods_fake, \
+               feature_maps_real_s, feature_maps_fake_s, \
+               feature_maps_real_p, feature_maps_fake_p = self.discriminate(real=batch["audio"],
+                                                                                       fake=batch["generated_audio"])
+        
+        batch["scales_real"] = scales_real
+        batch["scales_fake"] = scales_fake
+        batch["periods_real"] = periods_real
+        batch["periods_fake"] = periods_fake
+        batch["feature_maps_real_s"] = feature_maps_real_s
+        batch["feature_maps_fake_s"] = feature_maps_fake_s
+        batch["feature_maps_real_p"] = feature_maps_real_p
+        batch["feature_maps_fake_p"] = feature_maps_fake_p
 
-        metrics.update("loss", batch["loss"].item())
-        for met in self.metrics:
-            metrics.update(met.name, met(**batch))
+        if not is_train:
+            return batch
+
+        # in training
+        self.generator_optimizer.zero_grad()
+        generator_loss, fmap_loss, mel_loss, adv_loss = self.generator_criterion(periods_fake,
+                                                                                scales_fake,
+                                                                                feature_maps_real_s,
+                                                                                feature_maps_fake_s,
+                                                                                feature_maps_real_p,
+                                                                                feature_maps_fake_p,
+                                                                                batch["spectrogram"],
+                                                                                batch["generated_audio"],)
+        generator_loss.backward()
+        self.generator_optimizer.step()
+        batch["generator_loss"] = generator_loss
+        batch["feature_map_loss"] = fmap_loss
+        batch["mel_spectrogram_loss"] = mel_loss
+        batch["adversarial_loss"] = adv_loss
+
+        self.train_metrics.update("generator_loss", generator_loss.item())  
+        self.train_metrics.update("feature_map_loss", fmap_loss.item())
+        self.train_metrics.update("mel_spectrogram_loss", mel_loss.item())
+        self.train_metrics.update("adversarial_loss", adv_loss.item())
+
+
+
+        self.discriminator_optimizer.zero_grad()
+        discriminator_loss = self.discriminator_criterion(periods_real,
+                                                          periods_fake,
+                                                          scales_real,
+                                                          scales_fake)
+        discriminator_loss.backward()
+        self.discriminator_optimizer.step()
+        batch["discriminator_loss"] = discriminator_loss
+        self.train_metrics.update("discriminator_loss", discriminator_loss.item())
+
+        self._clip_grad_norm()
+
         return batch
 
     def _evaluation_epoch(self, epoch, part, dataloader):
@@ -161,28 +220,8 @@ class Trainer(BaseTrainer):
         :param epoch: Integer, current training epoch.
         :return: A log that contains information about validation
         """
-        self.model.eval()
-        self.evaluation_metrics.reset()
-        with torch.no_grad():
-            for batch_idx, batch in tqdm(
-                    enumerate(dataloader),
-                    desc=part,
-                    total=len(dataloader),
-            ):
-                batch = self.process_batch(
-                    batch,
-                    is_train=False,
-                    metrics=self.evaluation_metrics,
-                )
-            self.writer.set_step(epoch * self.len_epoch, part)
-            self._log_scalars(self.evaluation_metrics)
-            self._log_predictions(**batch)
-            self._log_spectrogram(batch["spectrogram"])
-
-        # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins="auto")
-        return self.evaluation_metrics.result()
+        pass
+        # TODO: run synthesis here
 
     def _progress(self, batch_idx):
         base = "[{}/{} ({:.0f}%)]"
@@ -200,8 +239,13 @@ class Trainer(BaseTrainer):
         self.writer.add_image("spectrogram", ToTensor()(image))
 
     @torch.no_grad()
-    def get_grad_norm(self, norm_type=2):
-        parameters = self.model.parameters()
+    def get_grad_norm(self, norm_type=2, type: str = "generator"):
+        if type == "generator":
+            parameters = self.model.generator.parameters()
+        elif type == "discriminator":
+            parameters = self.model.discriminator.parameters()
+        else:
+            raise NotImplementedError
         if isinstance(parameters, torch.Tensor):
             parameters = [parameters]
         parameters = [p for p in parameters if p.grad is not None]

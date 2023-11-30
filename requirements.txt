@@ -1,0 +1,11 @@
+numpy
+torch
+pandas
+torchaudio
+librosa
+pillow
+torchvision
+tqdm
+wandb
+matplotlib
+speechbrain

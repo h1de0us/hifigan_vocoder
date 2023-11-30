@@ -47,10 +47,10 @@ class MultiReceptorFieldFusion(nn.Module):
                  dilations: list,
                  relu_slope: float = 0.1,
                  ):
-        assert len(kernel_sizes) == n_blocks == len(dilations)
+        assert len(kernel_sizes) == len(dilations)
         self.res_blocks = nn.ModuleList([ResBlock(n_channels,
-                                                  kernel_sizes[i], 
-                                                  dilations[i], 
+                                                  kernel_sizes, 
+                                                  dilations, 
                                                   relu_slope) for i in range(n_blocks)])
 
     # one output goes to all blocks    
@@ -72,8 +72,6 @@ class Generator(nn.Module):
     '''
     def __init__(self, 
                  hidden_dim: int,
-                 n_convolutions: int,
-                 n_mrf_blocks: int,
                  n_res_blocks: int,
                  kernel_sizes_upsampling: list,
                  kernel_sizes_residual: list,
@@ -81,7 +79,8 @@ class Generator(nn.Module):
                  relu_slope: float = 0.1
                  ):
         
-        assert n_convolutions == n_mrf_blocks
+        n_convolutions = len(kernel_sizes_upsampling)
+        n_mrf_blocks = len(kernel_sizes_residual)
         self.conv_in = weight_norm(nn.Conv1d(in_channels=80, 
                                  out_channels=hidden_dim, 
                                  kernel_size=7, 

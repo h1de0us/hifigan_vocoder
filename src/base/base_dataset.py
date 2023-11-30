@@ -8,7 +8,6 @@ import torchaudio
 from torch import Tensor
 from torch.utils.data import Dataset
 
-from src.base.base_text_encoder import BaseTextEncoder
 from src.utils.parse_config import ConfigParser
 
 logger = logging.getLogger(__name__)
@@ -18,7 +17,6 @@ class BaseDataset(Dataset):
     def __init__(
             self,
             index,
-            text_encoder: BaseTextEncoder,
             config_parser: ConfigParser,
             wave_augs=None,
             spec_augs=None,
@@ -26,7 +24,6 @@ class BaseDataset(Dataset):
             max_audio_length=None,
             max_text_length=None,
     ):
-        self.text_encoder = text_encoder
         self.config_parser = config_parser
         self.wave_augs = wave_augs
         self.spec_augs = spec_augs
@@ -99,22 +96,8 @@ class BaseDataset(Dataset):
             exceeds_audio_length = False
 
         initial_size = len(index)
-        if max_text_length is not None:
-            exceeds_text_length = (
-                    np.array(
-                        [len(BaseTextEncoder.normalize_text(el["text"])) for el in index]
-                    )
-                    >= max_text_length
-            )
-            _total = exceeds_text_length.sum()
-            logger.info(
-                f"{_total} ({_total / initial_size:.1%}) records are longer then "
-                f"{max_text_length} characters. Excluding them."
-            )
-        else:
-            exceeds_text_length = False
 
-        records_to_filter = exceeds_text_length | exceeds_audio_length
+        records_to_filter = exceeds_audio_length
 
         if records_to_filter is not False and records_to_filter.any():
             _total = records_to_filter.sum()
