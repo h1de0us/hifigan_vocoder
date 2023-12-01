@@ -2,12 +2,12 @@ import torch
 from torch import nn
 
 
-from src.utils.preprocessing import MelSpectrogram
+from src.utils.preprocessing import MelSpectrogram, MelSpectrogramConfig
 
 class MelSpecLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        self.melspec = MelSpectrogram()
+        self.melspec = MelSpectrogram(MelSpectrogramConfig())
         self.l1_loss = nn.L1Loss()
 
     def forward(self, 
@@ -26,7 +26,9 @@ class FeatureMapLoss(nn.Module):
     def _forward(self, real, fake):
         loss = 0
         for r, f in zip(real, fake):
-            loss = loss + self.l1_loss(r, f)
+            for rmap, fmap in zip(r, f):
+                rmap, fmap = torch.tensor(rmap), torch.tensor(fmap)
+                loss = loss + self.l1_loss(rmap, fmap)
         return loss
     
     def forward(self,
@@ -84,7 +86,8 @@ class DiscriminatorLoss(nn.Module):
         for r, f in zip(real, fake):
             r_loss = torch.mean((1 - r) ** 2)
             g_loss = torch.mean(f ** 2)
-            total_loss = total_loss + (r_loss + g_loss)
+            total_loss = total_loss + r_loss
+            total_loss = total_loss + g_loss
 
         return total_loss
 

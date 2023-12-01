@@ -7,6 +7,7 @@ from src.model.common.utils import get_padding
 
 class BaseScaleDiscriminator(nn.Module):
     def __init__(self):
+        super().__init__()
         # just a bunch of random kernel sizes and strides
         self.convs = nn.ModuleList([
             weight_norm(nn.Conv1d(1, 128, 15, 1, padding=7)),
@@ -28,7 +29,7 @@ class BaseScaleDiscriminator(nn.Module):
             x = convolution(x)
             x = F.leaky_relu(x)
             feature_map.append(x)
-        x = self.conv_post(x)
+        x = self.conv_out(x)
         feature_map.append(x)
         x = torch.flatten(x, 1, -1)
         return x, feature_map
@@ -44,7 +45,8 @@ class MultiScaleDiscriminator(nn.Module):
     with kernel size 4. 
     '''
     def __init__(self):
-        self.scale_disctriminators = nn.ModuleList([
+        super().__init__()
+        self.scale_discriminators = nn.ModuleList([
             BaseScaleDiscriminator(),
             BaseScaleDiscriminator(),
             BaseScaleDiscriminator()
@@ -89,11 +91,12 @@ class BasePeriodDiscriminator(nn.Module):
                  period: int,
                  kernel_size: int = 5,
                  stride: int = 3):
+        super().__init__()
         self.period = period
         # more more random numbers
         self.convs = nn.ModuleList([
             weight_norm(nn.Conv2d(1, 32, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
-            weight_norm(nn.Cond2d(32, 128, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
+            weight_norm(nn.Conv2d(32, 128, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
             weight_norm(nn.Conv2d(128, 512, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
             weight_norm(nn.Conv2d(512, 1024, (kernel_size, 1), (stride, 1), padding=(get_padding(kernel_size, 1), 0))),
             weight_norm(nn.Conv2d(1024, 1024, (kernel_size, 1), 1, padding=(2, 0))),
@@ -135,6 +138,7 @@ class MultiPeriodDiscriminator(nn.Module):
     p and then apply 2D convolutions to the reshaped data. 
     '''
     def __init__(self, periods: list = [2, 3, 5, 7, 11]):
+        super().__init__()
         self.discriminators = nn.ModuleList([BasePeriodDiscriminator(period) for period in periods])
 
     def forward(self, real, fake):
@@ -154,6 +158,7 @@ class MultiPeriodDiscriminator(nn.Module):
 
 class Discriminator(nn.Module):
     def __init__(self):
+        super().__init__()
         self.scale_discriminator = MultiScaleDiscriminator()
         self.period_discriminator = MultiPeriodDiscriminator()
 

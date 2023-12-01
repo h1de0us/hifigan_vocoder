@@ -7,9 +7,7 @@
     "arch": {
         "type": "HiFiGAN",
         "args": {
-            "input_channels": 80,
             "hidden_dim": 512,
-            "n_res_blocks": 4,
             "kernel_sizes_upsampling": [16, 16, 4, 4],
             "kernel_sizes_residual": [3, 7, 11],
             "dilations": [1, 3, 5]
@@ -18,7 +16,7 @@
     "data": {
         "train": {
             "batch_size": 1,
-            "num_workers": 0,
+            "num_workers": 1,
             "datasets": [
                 {
                     "type": "LJSpeechDataset",

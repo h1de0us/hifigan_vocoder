@@ -18,19 +18,14 @@ class BaseDataset(Dataset):
             self,
             index,
             config_parser: ConfigParser,
-            wave_augs=None,
-            spec_augs=None,
             limit=None,
-            max_audio_length=None,
-            max_text_length=None,
+            max_audio_length=None, # not in seconds
     ):
         self.config_parser = config_parser
-        self.wave_augs = wave_augs
-        self.spec_augs = spec_augs
-        self.log_spec = config_parser["preprocessing"]["log_spec"]
+        self.max_audio_length = max_audio_length
 
         self._assert_index_is_valid(index)
-        index = self._filter_records_from_dataset(index, max_audio_length, max_text_length, limit)
+        index = self._filter_records_from_dataset(index, max_audio_length, limit)
         # it's a good idea to sort index by audio length
         # It would be easier to write length-based batch samplers later
         index = self._sort_index(index)
@@ -40,13 +35,15 @@ class BaseDataset(Dataset):
         data_dict = self._index[ind]
         audio_path = data_dict["path"]
         audio_wave = self.load_audio(audio_path)
-        audio_wave, audio_spec = self.process_wave(audio_wave)
+
+        # cut random pieces of audio to not have an OOM error
+        if self.max_audio_length < audio_wave.shape[-1]: # not in seconds!!!!
+            start_idx = np.random.randint(0, audio_wave.shape[-1] - self.max_audio_length)
+            audio_wave = audio_wave[..., start_idx:start_idx+self.max_audio_length]
+
         return {
             "audio": audio_wave,
-            "spectrogram": audio_spec,
             "duration": audio_wave.size(1) / self.config_parser["preprocessing"]["sr"],
-            "text": data_dict["text"],
-            "text_encoded": self.text_encoder.encode(data_dict["text"]),
             "audio_path": audio_path,
         }
 
@@ -65,24 +62,10 @@ class BaseDataset(Dataset):
             audio_tensor = torchaudio.functional.resample(audio_tensor, sr, target_sr)
         return audio_tensor
 
-    def process_wave(self, audio_tensor_wave: Tensor):
-        with torch.no_grad():
-            if self.wave_augs is not None:
-                audio_tensor_wave = self.wave_augs(audio_tensor_wave)
-            wave2spec = self.config_parser.init_obj(
-                self.config_parser["preprocessing"]["spectrogram"],
-                torchaudio.transforms,
-            )
-            audio_tensor_spec = wave2spec(audio_tensor_wave)
-            if self.spec_augs is not None:
-                audio_tensor_spec = self.spec_augs(audio_tensor_spec)
-            if self.log_spec:
-                audio_tensor_spec = torch.log(audio_tensor_spec + 1e-5)
-            return audio_tensor_wave, audio_tensor_spec
 
     @staticmethod
     def _filter_records_from_dataset(
-            index: list, max_audio_length, max_text_length, limit
+            index: list, max_audio_length, limit
     ) -> list:
         initial_size = len(index)
         if max_audio_length is not None:

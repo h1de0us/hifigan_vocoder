@@ -7,7 +7,6 @@ from src.model.common.discriminator import Discriminator
 class HiFiGAN(nn.Module):
     def __init__(self,
                  hidden_dim: int,
-                 n_res_blocks: int,
                  kernel_sizes_upsampling: list,
                  kernel_sizes_residual: list,
                  dilations: list,
@@ -16,15 +15,12 @@ class HiFiGAN(nn.Module):
         super().__init__()
         self.generator = Generator(
             hidden_dim,
-            n_res_blocks,
             kernel_sizes_upsampling,
             kernel_sizes_residual,
             dilations,
             relu_slope
         )
-        self.discriminator = Discriminator(
-
-        )
+        self.discriminator = Discriminator()
 
     def forward(self, spectrogram, **batch):
         return self.generator(spectrogram)

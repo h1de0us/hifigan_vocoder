@@ -17,8 +17,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # fix random seeds for reproducibility
 SEED = 123
 torch.manual_seed(SEED)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = False
+torch.backends.cudnn.benchmark = True
 np.random.seed(SEED)
 
 
@@ -32,6 +32,11 @@ def main(config):
 
     # build model architecture, then print to console
     model = config.init_obj(config["arch"], module_arch)
+    print(f"Number of parameters in the model: {sum(p.numel() for p in model.parameters())}")
+    print(f"Number of parameters in the generator: {sum(p.numel() for p in model.generator.parameters())}")
+    print(f"Number of parameters in the discriminator: {sum(p.numel() for p in model.discriminator.parameters())}")
+    print(f"Number of parameters in the MSD: {sum(p.numel() for p in model.discriminator.scale_discriminator.parameters())}")
+    print(f"Number of parameters in the MPD: {sum(p.numel() for p in model.discriminator.period_discriminator.parameters())}")
     logger.info(model)
 
     # prepare for (multi-device) GPU training
@@ -46,9 +51,10 @@ def main(config):
 
     # build optimizer, learning rate scheduler. delete every line containing lr_scheduler for
     # disabling scheduler
-    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
-    generator_optimizer = config.init_obj(config["generator_optimizer"], torch.optim, trainable_params)
-    discriminator_optimizer = config.init_obj(config["discriminator_optimizer"], torch.optim, trainable_params)
+    generator_trainable_params = filter(lambda p: p.requires_grad, model.generator.parameters())
+    discriminator_trainable_params = filter(lambda p: p.requires_grad, model.discriminator.parameters())
+    generator_optimizer = config.init_obj(config["generator_optimizer"], torch.optim, generator_trainable_params)
+    discriminator_optimizer = config.init_obj(config["discriminator_optimizer"], torch.optim, discriminator_trainable_params)
     generator_lr_scheduler = config.init_obj(config["generator_lr_scheduler"], torch.optim.lr_scheduler, generator_optimizer)
     discriminator_lr_scheduler = config.init_obj(config["discriminator_lr_scheduler"], torch.optim.lr_scheduler, discriminator_optimizer)
 

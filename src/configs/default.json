@@ -1,0 +1,83 @@
+{
+    "name": "train",
+    "n_gpu": 1,
+    "preprocessing": {
+        "sr": 22050
+    },
+    "arch": {
+        "type": "HiFiGAN",
+        "args": {
+            "hidden_dim": 512,
+            "kernel_sizes_upsampling": [16, 16, 4, 4],
+            "kernel_sizes_residual": [3, 7, 11],
+            "dilations": [1, 3, 5]
+        }
+    },
+    "data": {
+        "train": {
+            "batch_size": 16,
+            "num_workers": 4,
+            "datasets": [
+                {
+                    "type": "LJSpeechDataset",
+                    "args": {
+                        "part": "train",
+                        "max_audio_length": 8192
+                    }
+                }
+            ]
+        }
+    },
+    "generator_optimizer": {
+        "type": "Adam",
+        "args": {
+          "lr": 3e-4
+        }
+      },
+    "discriminator_optimizer": {
+        "type": "Adam",
+        "args": {
+          "lr": 3e-4
+        }
+      },
+    "generator_loss": {
+        "type": "GeneratorLoss",
+        "args": {}
+    },
+    "discriminator_loss": {
+        "type": "DiscriminatorLoss",
+        "args": {}
+    },
+    "generator_lr_scheduler": {
+        "type": "OneCycleLR",
+        "args": {
+            "steps_per_epoch": 100,
+            "epochs": 50,
+            "anneal_strategy": "cos",
+            "max_lr": 1e-2,
+            "pct_start": 0.2
+        }
+    },
+    "discriminator_lr_scheduler": {
+        "type": "OneCycleLR",
+        "args": {
+            "steps_per_epoch": 100,
+            "epochs": 50,
+            "anneal_strategy": "cos",
+            "max_lr": 1e-2,
+            "pct_start": 0.2
+        }
+    },
+    "trainer": {
+        "epochs": 50,
+        "save_dir": "saved/",
+        "save_period": 5,
+        "verbosity": 2,
+        "monitor": "min val_loss",
+        "early_stop": 500,
+        "visualize": "wandb",
+        "wandb_project": "hifigan_project",
+        "len_epoch": 100,
+        "grad_norm_clip": 10
+    }
+}

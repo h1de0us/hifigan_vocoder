@@ -11,27 +11,36 @@ class ResBlock(nn.Module):
     '''
     def __init__(self, 
                  in_channels: int,
-                 kernel_sizes: list,
+                 kernel_size: list,
                  dilations: list,
                  relu_slope: float = 0.1,
                  ):
-        self.n_convs = len(kernel_sizes)
+        super().__init__()
         self.relu_slope = relu_slope
-        self.blocks = nn.ModuleList([
-            weight_norm(nn.Conv1d(in_channels, 1, 
-                      kernel_size=kernel_size, 
-                      dilation=dilation, 
-                      padding=get_padding(kernel_size, dilation)))
-                for kernel_size, dilation in zip(kernel_sizes, dilations)
-        ])
+        self.blocks = []
+        for dilation in dilations:
+            block = nn.Sequential(
+                nn.LeakyReLU(relu_slope),
+                nn.Conv1d(in_channels, in_channels, 
+                          kernel_size=kernel_size, 
+                          dilation=dilation, 
+                          padding=get_padding(kernel_size, dilation)),
+                nn.LeakyReLU(relu_slope),
+                nn.Conv1d(in_channels, in_channels, 
+                          kernel_size=kernel_size, 
+                          dilation=1, 
+                          padding=get_padding(kernel_size, 1)),
+            )
+            self.blocks.append(block)
+        self.blocks = nn.ModuleList(self.blocks)
 
 
     def forward(self, x):
+        # return torch.sum(torch.as_tensor([block(x) for block in self.blocks]), dim=0)
+        outputs = 0
         for block in self.blocks:
-            tmp = F.leaky_relu(self.relu_slope)(x)
-            tmp = block(tmp)
-            x = x + tmp
-        return x
+            outputs = outputs + block(x)
+        return outputs
     
 
 
@@ -41,20 +50,21 @@ class MultiReceptorFieldFusion(nn.Module):
     receptor fields. It uses a series of residual blocks to do so.
     '''
     def __init__(self, 
-                 n_blocks: int,
                  n_channels: int,
                  kernel_sizes: list,
                  dilations: list,
                  relu_slope: float = 0.1,
                  ):
+        super().__init__()
         assert len(kernel_sizes) == len(dilations)
         self.res_blocks = nn.ModuleList([ResBlock(n_channels,
-                                                  kernel_sizes, 
+                                                  kernel_sizes[i], 
                                                   dilations, 
-                                                  relu_slope) for i in range(n_blocks)])
+                                                  relu_slope) for i in range(len(kernel_sizes))])
 
     # one output goes to all blocks    
     def forward(self, x):
+        outputs = None
         for block in self.res_blocks:
             if outputs is None:
                 outputs = block(x)
@@ -72,19 +82,20 @@ class Generator(nn.Module):
     '''
     def __init__(self, 
                  hidden_dim: int,
-                 n_res_blocks: int,
-                 kernel_sizes_upsampling: list,
-                 kernel_sizes_residual: list,
-                 dilations: list,
+                 kernel_sizes_upsampling: list = [16, 16, 4, 4],
+                 kernel_sizes_residual: list = [3, 7, 11],
+                 dilations_residual: list = [1, 3, 5],
                  relu_slope: float = 0.1
                  ):
+        super().__init__()
         
         n_convolutions = len(kernel_sizes_upsampling)
-        n_mrf_blocks = len(kernel_sizes_residual)
+        n_mrf_blocks = n_convolutions
         self.conv_in = weight_norm(nn.Conv1d(in_channels=80, 
                                  out_channels=hidden_dim, 
                                  kernel_size=7, 
                                  stride=1,
+                                 dilation=1,
                                  padding=3))
 
         self.convolutions = nn.ModuleList([
@@ -97,10 +108,9 @@ class Generator(nn.Module):
             for i in range(n_convolutions)
         ])
         self.mrfs = nn.ModuleList([MultiReceptorFieldFusion(
-            n_blocks=n_res_blocks,
             n_channels=hidden_dim // (2 ** (i + 1)),
             kernel_sizes=kernel_sizes_residual,
-            dilations=dilations,
+            dilations=dilations_residual,
             relu_slope=relu_slope
         ) for i in range(n_mrf_blocks)])
 
@@ -109,7 +119,10 @@ class Generator(nn.Module):
                                   out_channels=1,
                                   kernel_size=7,
                                   stride=1,
+                                  dilation=1,
                                   padding=3))
+        
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
         x = self.conv_in(x)
@@ -117,5 +130,6 @@ class Generator(nn.Module):
             x = self.convolutions[i](x)
             x = self.mrfs[i](x)
         x = self.conv_out(x)
+        x = self.tanh(x)
         
         return x

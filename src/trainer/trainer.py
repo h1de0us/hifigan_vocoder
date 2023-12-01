@@ -75,7 +75,7 @@ class Trainer(BaseTrainer):
         """
         Move all necessary tensors to the HPU
         """
-        for tensor_for_gpu in ["spectrogram"]:
+        for tensor_for_gpu in ["spectrogram", "audio"]:
             batch[tensor_for_gpu] = batch[tensor_for_gpu].to(device)
         return batch
 
@@ -95,6 +95,8 @@ class Trainer(BaseTrainer):
         self.model.train()
         self.train_metrics.reset()
         self.writer.add_scalar("epoch", epoch)
+        # DEBUG
+        torch.autograd.set_detect_anomaly(True)
         for batch_idx, batch in enumerate(
                 tqdm(self.train_dataloader, desc="train", total=self.len_epoch)
         ):
@@ -119,8 +121,13 @@ class Trainer(BaseTrainer):
             if batch_idx % self.log_step == 0:
                 self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
                 self.logger.debug(
-                    "Train Epoch: {} {} Loss: {:.6f}".format(
-                        epoch, self._progress(batch_idx), batch["loss"].item()
+                    "Train Epoch: {} {} Generator loss: {:.6f}".format(
+                        epoch, self._progress(batch_idx), batch["generator_loss"].item()
+                    )
+                )
+                self.logger.debug(
+                    "Train Epoch: {} {} Discriminator loss: {:.6f}".format(
+                        epoch, self._progress(batch_idx), batch["discriminator_loss"].item()
                     )
                 )
                 self.writer.add_scalar(
@@ -157,11 +164,12 @@ class Trainer(BaseTrainer):
         else:
             batch["generated_audio"] = generated_audio
 
+        # detach to properly calculate generator loss
         scales_real, scales_fake, \
                periods_real, periods_fake, \
                feature_maps_real_s, feature_maps_fake_s, \
-               feature_maps_real_p, feature_maps_fake_p = self.discriminate(real=batch["audio"],
-                                                                                       fake=batch["generated_audio"])
+               feature_maps_real_p, feature_maps_fake_p = self.model.discriminate(real=batch["audio"],
+                                                                                  fake=batch["generated_audio"].detach())
         
         batch["scales_real"] = scales_real
         batch["scales_fake"] = scales_fake
@@ -174,8 +182,27 @@ class Trainer(BaseTrainer):
 
         if not is_train:
             return batch
-
+        
         # in training
+        self.discriminator_optimizer.zero_grad()
+        discriminator_loss = self.discriminator_criterion(periods_real,
+                                                          periods_fake,
+                                                          scales_real,
+                                                          scales_fake)
+        discriminator_loss.backward()
+        self.discriminator_optimizer.step()
+        batch["discriminator_loss"] = discriminator_loss
+        self.train_metrics.update("discriminator_loss", discriminator_loss.item())
+
+        # second discriminate to update values
+        # here we do not use detach
+        scales_real, scales_fake, \
+               periods_real, periods_fake, \
+               feature_maps_real_s, feature_maps_fake_s, \
+               feature_maps_real_p, feature_maps_fake_p = self.model.discriminate(real=batch["audio"],
+                                                                                  fake=batch["generated_audio"])
+
+
         self.generator_optimizer.zero_grad()
         generator_loss, fmap_loss, mel_loss, adv_loss = self.generator_criterion(periods_fake,
                                                                                 scales_fake,
@@ -196,18 +223,6 @@ class Trainer(BaseTrainer):
         self.train_metrics.update("feature_map_loss", fmap_loss.item())
         self.train_metrics.update("mel_spectrogram_loss", mel_loss.item())
         self.train_metrics.update("adversarial_loss", adv_loss.item())
-
-
-
-        self.discriminator_optimizer.zero_grad()
-        discriminator_loss = self.discriminator_criterion(periods_real,
-                                                          periods_fake,
-                                                          scales_real,
-                                                          scales_fake)
-        discriminator_loss.backward()
-        self.discriminator_optimizer.step()
-        batch["discriminator_loss"] = discriminator_loss
-        self.train_metrics.update("discriminator_loss", discriminator_loss.item())
 
         self._clip_grad_norm()
 
