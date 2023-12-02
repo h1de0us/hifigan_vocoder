@@ -170,15 +170,6 @@ class Trainer(BaseTrainer):
                feature_maps_real_s, feature_maps_fake_s, \
                feature_maps_real_p, feature_maps_fake_p = self.model.discriminate(real=batch["audio"],
                                                                                   fake=batch["generated_audio"].detach())
-        
-        batch["scales_real"] = scales_real
-        batch["scales_fake"] = scales_fake
-        batch["periods_real"] = periods_real
-        batch["periods_fake"] = periods_fake
-        batch["feature_maps_real_s"] = feature_maps_real_s
-        batch["feature_maps_fake_s"] = feature_maps_fake_s
-        batch["feature_maps_real_p"] = feature_maps_real_p
-        batch["feature_maps_fake_p"] = feature_maps_fake_p
 
         if not is_train:
             return batch

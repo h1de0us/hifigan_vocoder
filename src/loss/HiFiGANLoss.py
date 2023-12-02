@@ -27,7 +27,7 @@ class FeatureMapLoss(nn.Module):
         loss = 0
         for r, f in zip(real, fake):
             for rmap, fmap in zip(r, f):
-                rmap, fmap = torch.tensor(rmap), torch.tensor(fmap)
+                # rmap, fmap = torch.tensor(rmap), torch.tensor(fmap)
                 loss = loss + self.l1_loss(rmap, fmap)
         return loss
     
