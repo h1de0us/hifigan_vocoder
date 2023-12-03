@@ -4,49 +4,61 @@ from torch import nn
 
 from src.utils.preprocessing import MelSpectrogram, MelSpectrogramConfig
 
-class MelSpecLoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.melspec = MelSpectrogram(MelSpectrogramConfig())
-        self.l1_loss = nn.L1Loss()
+# class MelSpecLoss(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.melspec = MelSpectrogram(MelSpectrogramConfig())
+#         self.l1_loss = nn.L1Loss()
 
-    def forward(self, 
-                real_spec, 
-                fake_audio
-        ):
-        fake_spec = self.melspec(fake_audio)
-        return self.l1_loss(real_spec, fake_spec)
+#     def forward(self, 
+#                 real_spec, 
+#                 fake_audio
+#         ):
+#         fake_spec = self.melspec(fake_audio)
+#         return self.l1_loss(real_spec, fake_spec)
+
+def calculate_mel_spec_loss(real_spec, fake_audio):
+    melspec = MelSpectrogram(MelSpectrogramConfig())
+    fake_spec = melspec(fake_audio)
+    l1_loss = nn.L1Loss()
+    return l1_loss(real_spec, fake_spec)
   
 
-class FeatureMapLoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.l1_loss = nn.L1Loss()
+# class FeatureMapLoss(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         self.l1_loss = nn.L1Loss()
 
-    def _forward(self, real, fake):
-        loss = 0
-        for r, f in zip(real, fake):
-            for rmap, fmap in zip(r, f):
-                # rmap, fmap = torch.tensor(rmap), torch.tensor(fmap)
-                loss = loss + self.l1_loss(rmap, fmap)
-        return loss
+#     def _forward(self, real, fake):
+#         loss = 0
+#         for r, f in zip(real, fake):
+#             for rmap, fmap in zip(r, f):
+#                 # rmap, fmap = torch.tensor(rmap), torch.tensor(fmap)
+#                 loss = loss + self.l1_loss(rmap, fmap)
+#         return loss
     
-    def forward(self,
-                feature_maps_real_s,
-                feature_maps_fake_s,
-                feature_maps_real_p,
-                feature_maps_fake_p,
-                ):
-        period_loss = self._forward(feature_maps_real_p, feature_maps_fake_p)
-        scale_loss = self._forward(feature_maps_real_s, feature_maps_fake_s)
-        return period_loss + scale_loss
+#     def forward(self,
+#                 feature_maps_real_s,
+#                 feature_maps_fake_s,
+#                 feature_maps_real_p,
+#                 feature_maps_fake_p,
+#                 ):
+#         period_loss = self._forward(feature_maps_real_p, feature_maps_fake_p)
+#         scale_loss = self._forward(feature_maps_real_s, feature_maps_fake_s)
+#         return period_loss + scale_loss
+
+def calculate_feature_map_loss(real, fake):
+    loss = 0
+    l1_loss = nn.L1Loss()
+    for r, f in zip(real, fake):
+        for rmap, fmap in zip(r, f):
+            loss = loss + l1_loss(rmap, fmap)
+    return loss
     
 
 class GeneratorLoss(nn.Module):
     def __init__(self, lambda_fmap=2, lambda_mel=45):
         super().__init__()
-        self.feature_map_loss = FeatureMapLoss()
-        self.mel_spec_loss = MelSpecLoss()
         self.lambda_fmap = lambda_fmap
         self.lambda_mel = lambda_mel
 
@@ -60,11 +72,11 @@ class GeneratorLoss(nn.Module):
                 real_spec,
                 fake_audio,
                 ):
-        fmap_loss = self.feature_map_loss(feature_maps_real_s,
-                                            feature_maps_fake_s,
-                                            feature_maps_real_p,
+        fmap_loss = calculate_feature_map_loss(feature_maps_real_s,
+                                            feature_maps_fake_s) + \
+                    calculate_feature_map_loss(feature_maps_real_p,
                                             feature_maps_fake_p,)
-        mel_loss = self.mel_spec_loss(real_spec, fake_audio)
+        mel_loss = calculate_mel_spec_loss(real_spec, fake_audio)
 
         adv_loss = 0
         for period in period_fake:
