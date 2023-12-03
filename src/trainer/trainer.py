@@ -228,6 +228,7 @@ class Trainer(BaseTrainer):
         """
         pass
         # TODO: run synthesis here
+        
 
     def _progress(self, batch_idx):
         base = "[{}/{} ({:.0f}%)]"

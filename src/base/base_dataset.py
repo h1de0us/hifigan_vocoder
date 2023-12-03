@@ -23,6 +23,7 @@ class BaseDataset(Dataset):
     ):
         self.config_parser = config_parser
         self.max_audio_length = max_audio_length
+        self.limit = limit
 
         self._assert_index_is_valid(index)
         index = self._filter_records_from_dataset(index, max_audio_length, limit)
@@ -37,9 +38,14 @@ class BaseDataset(Dataset):
         audio_wave = self.load_audio(audio_path)
 
         # cut random pieces of audio to not have an OOM error
+
         if self.max_audio_length < audio_wave.shape[-1]: # not in seconds!!!!
-            start_idx = np.random.randint(0, audio_wave.shape[-1] - self.max_audio_length)
-            audio_wave = audio_wave[..., start_idx:start_idx+self.max_audio_length]
+            if self.limit is None:
+                start_idx = np.random.randint(0, audio_wave.shape[-1] - self.max_audio_length)
+                audio_wave = audio_wave[..., start_idx:start_idx+self.max_audio_length]
+            else:
+                audio_wave = audio_wave[..., :self.max_audio_length]
+
 
         return {
             "audio": audio_wave,

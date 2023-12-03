@@ -22,7 +22,7 @@
                     "type": "LJSpeechDataset",
                     "args": {
                         "part": "train",
-                        "max_audio_length": 8192
+                        "max_audio_length": 16384
                     }
                 }
             ]
