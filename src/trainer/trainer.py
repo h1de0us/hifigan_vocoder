@@ -8,11 +8,15 @@ import torch
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from torchvision.transforms import ToTensor
+import torchaudio
 from tqdm import tqdm
 
 from src.base import BaseTrainer
 from src.logger.utils import plot_spectrogram_to_buf
 from src.utils import inf_loop, MetricTracker
+
+from src.utils import ROOT_PATH
+from src.utils.preprocessing import MelSpectrogram, MelSpectrogramConfig
 
 
 class Trainer(BaseTrainer):
@@ -96,7 +100,7 @@ class Trainer(BaseTrainer):
         self.train_metrics.reset()
         self.writer.add_scalar("epoch", epoch)
         # DEBUG
-        torch.autograd.set_detect_anomaly(True)
+        # torch.autograd.set_detect_anomaly(True)
         for batch_idx, batch in enumerate(
                 tqdm(self.train_dataloader, desc="train", total=self.len_epoch)
         ):
@@ -151,8 +155,9 @@ class Trainer(BaseTrainer):
             self.discriminator_lr_scheduler.step()
 
         # TODO: call _evaluation_epoch here
+        self._evaluation_epoch(epoch)
 
-        self._log_audio(name='train.wav', audio=batch["generated_audio"][0], sample_rate=22050)
+        # self._log_audio(name='train.wav', audio=batch["generated_audio"][0], sample_rate=22050)
 
         return log
 
@@ -219,15 +224,31 @@ class Trainer(BaseTrainer):
 
         return batch
 
-    def _evaluation_epoch(self, epoch, part, dataloader):
+    def _evaluation_epoch(self, epoch):
         """
         Validate after training an epoch
 
         :param epoch: Integer, current training epoch.
         :return: A log that contains information about validation
         """
-        pass
-        # TODO: run synthesis here
+
+        melspec = MelSpectrogram(MelSpectrogramConfig)
+        mels = []
+        for i in range(1, 4):
+            path = ROOT_PATH / 'test_data' / f'audio_{i}.wav'
+            audio = self._load_audio(path).detach().cpu()
+            mels.append(melspec(audio))
+
+        with torch.no_grad():
+            self.model.eval()
+            save = ROOT_PATH / 'results'
+            save.mkdir(exist_ok=True, parents=True)
+
+            for i, mel in enumerate(mels):
+                audio = self.model(mel.to(self.device)).squeeze(0)
+                self._log_audio(f'audio_{i}', audio, 22050)
+
+        
         
 
     def _progress(self, batch_idx):
@@ -274,3 +295,12 @@ class Trainer(BaseTrainer):
         if self.writer is None:
             return
         self.writer.add_audio(name, audio, sample_rate)
+
+
+    def _load_audio(self, path):
+        audio_tensor, sr = torchaudio.load(path)
+        audio_tensor = audio_tensor[0:1, :]  # remove all channels but the first
+        target_sr = 22050
+        if sr != target_sr:
+            audio_tensor = torchaudio.functional.resample(audio_tensor, sr, target_sr)
+        return audio_tensor

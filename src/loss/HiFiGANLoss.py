@@ -18,7 +18,7 @@ from src.utils.preprocessing import MelSpectrogram, MelSpectrogramConfig
 #         return self.l1_loss(real_spec, fake_spec)
 
 def calculate_mel_spec_loss(real_spec, fake_audio):
-    melspec = MelSpectrogram(MelSpectrogramConfig())
+    melspec = MelSpectrogram(MelSpectrogramConfig()).to(real_spec.device)
     fake_spec = melspec(fake_audio)
     l1_loss = nn.L1Loss()
     return l1_loss(real_spec, fake_spec)
