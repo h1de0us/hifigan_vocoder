@@ -220,7 +220,7 @@ class Trainer(BaseTrainer):
         self.train_metrics.update("mel_spectrogram_loss", mel_loss.item())
         self.train_metrics.update("adversarial_loss", adv_loss.item())
 
-        # self._clip_grad_norm()
+        self._clip_grad_norm()
 
         return batch
 
