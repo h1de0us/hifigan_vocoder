@@ -21,15 +21,15 @@ class ResBlock(nn.Module):
         for dilation in dilations:
             block = nn.Sequential(
                 nn.LeakyReLU(relu_slope),
-                nn.Conv1d(in_channels, in_channels, 
+                weight_norm(nn.Conv1d(in_channels, in_channels, 
                           kernel_size=kernel_size, 
                           dilation=dilation, 
-                          padding=get_padding(kernel_size, dilation)),
+                          padding=get_padding(kernel_size, dilation))),
                 nn.LeakyReLU(relu_slope),
-                nn.Conv1d(in_channels, in_channels, 
+                weight_norm(nn.Conv1d(in_channels, in_channels, 
                           kernel_size=kernel_size, 
                           dilation=1, 
-                          padding=get_padding(kernel_size, 1)),
+                          padding=get_padding(kernel_size, 1))),
             )
             self.blocks.append(block)
         self.blocks = nn.ModuleList(self.blocks)
