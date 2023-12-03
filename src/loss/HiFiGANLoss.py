@@ -16,14 +16,6 @@ class MelSpecLoss(nn.Module):
         ):
         fake_spec = self.melspec(fake_audio).squeeze(0)
         return self.l1_loss(real_spec, fake_spec)
-
-# def calculate_mel_spec_loss(real_spec, fake_audio):
-#     melspec = MelSpectrogram(MelSpectrogramConfig()).to(real_spec.device)
-#     fake_spec = melspec(fake_audio)
-#     # print('real spec shape', real_spec.shape)
-#     # print('fake spec shape', fake_spec.shape)
-#     l1_loss = nn.L1Loss()
-#     return l1_loss(real_spec, fake_spec)
   
 
 class FeatureMapLoss(nn.Module):
@@ -48,14 +40,6 @@ class FeatureMapLoss(nn.Module):
         period_loss = self._forward(feature_maps_real_p, feature_maps_fake_p)
         scale_loss = self._forward(feature_maps_real_s, feature_maps_fake_s)
         return period_loss + scale_loss
-
-# def calculate_feature_map_loss(real, fake):
-#     loss = 0
-#     for r, f in zip(real, fake):
-#         for rmap, fmap in zip(r, f):
-#             loss = loss + torch.mean(torch.abs(rmap - fmap))
-#     return loss
-    
 
 class GeneratorLoss(nn.Module):
     def __init__(self, lambda_fmap=2, lambda_mel=45):
