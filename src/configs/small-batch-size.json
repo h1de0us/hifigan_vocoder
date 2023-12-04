@@ -15,8 +15,8 @@
     },
     "data": {
         "train": {
-            "batch_size": 1,
-            "num_workers": 1,
+            "batch_size": 16,
+            "num_workers": 4,
             "datasets": [
                 {
                     "type": "LJSpeechDataset",

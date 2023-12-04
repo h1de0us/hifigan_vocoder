@@ -14,7 +14,7 @@ class MelSpecLoss(nn.Module):
                 real_spec, 
                 fake_audio
         ):
-        fake_spec = self.melspec(fake_audio).squeeze(0)
+        fake_spec = self.melspec(fake_audio.squeeze(1))
         return self.l1_loss(real_spec, fake_spec)
   
 
