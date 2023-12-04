@@ -70,7 +70,7 @@ class MultiReceptorFieldFusion(nn.Module):
                 outputs = block(x)
             else:
                 outputs = outputs + block(x)
-        return outputs
+        return outputs / len(self.res_blocks)
         
 
 # TODO: weight normalization
@@ -89,6 +89,7 @@ class Generator(nn.Module):
                  ):
         super().__init__()
         
+        self.relu_slope = relu_slope
         n_convolutions = len(kernel_sizes_upsampling)
         n_mrf_blocks = n_convolutions
         self.conv_in = weight_norm(nn.Conv1d(in_channels=80, 
@@ -127,8 +128,10 @@ class Generator(nn.Module):
     def forward(self, x):
         x = self.conv_in(x)
         for i in range(len(self.convolutions)):
+            x = F.leaky_relu(x, self.relu_slope)
             x = self.convolutions[i](x)
             x = self.mrfs[i](x)
+        x = F.leaky_relu(x, self.relu_slope)
         x = self.conv_out(x)
         x = self.tanh(x)
         
