@@ -39,7 +39,7 @@ class ResBlock(nn.Module):
         # return torch.sum(torch.as_tensor([block(x) for block in self.blocks]), dim=0)
         outputs = x
         for block in self.blocks:
-            outputs = outputs + block(x)
+            outputs = outputs + block(outputs)
         return outputs
     
 
