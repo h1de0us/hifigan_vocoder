@@ -291,12 +291,13 @@ class Trainer(BaseTrainer):
         for metric_name in metric_tracker.keys():
             self.writer.add_scalar(f"{metric_name}", metric_tracker.avg(metric_name))
 
+    @staticmethod
     def _log_audio(self, name, audio, sample_rate):
         if self.writer is None:
             return
         self.writer.add_audio(name, audio, sample_rate)
 
-
+    @staticmethod
     def _load_audio(self, path):
         audio_tensor, sr = torchaudio.load(path)
         audio_tensor = audio_tensor[0:1, :]  # remove all channels but the first
