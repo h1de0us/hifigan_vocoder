@@ -16,7 +16,7 @@
     "data": {
         "train": {
             "batch_size": 16,
-            "num_workers": 4,
+            "num_workers": 5,
             "datasets": [
                 {
                     "type": "LJSpeechDataset",
@@ -70,15 +70,15 @@
         }
     },
     "trainer": {
-        "epochs": 200,
+        "epochs": 100,
         "save_dir": "saved/",
-        "save_period": 25,
+        "save_period": 5,
         "verbosity": 2,
-        "monitor": "min val_loss",
+        "monitor": "min mel_spectrogram_loss_train",
         "early_stop": 500,
         "visualize": "wandb",
         "wandb_project": "hifigan_project",
-        "len_epoch": 300,
+        "len_epoch": 100,
         "grad_norm_clip": 50
     }
 }
