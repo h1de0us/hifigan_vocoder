@@ -55,7 +55,6 @@ def main(config, out_file):
 
             for i, mel in enumerate(mels):
                 audio = model(mel.to(device)).squeeze(0)
-                Trainer._log_audio(f'audio_{i}', audio, 22050)
                 torchaudio.save(f'{save}/audio_{i}.wav', audio, 22050)
 
 
