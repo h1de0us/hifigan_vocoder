@@ -52,7 +52,7 @@
     "generator_lr_scheduler": {
         "type": "OneCycleLR",
         "args": {
-            "steps_per_epoch": 100,
+            "steps_per_epoch": 300,
             "epochs": 50,
             "anneal_strategy": "cos",
             "max_lr": 1e-2,
@@ -62,7 +62,7 @@
     "discriminator_lr_scheduler": {
         "type": "OneCycleLR",
         "args": {
-            "steps_per_epoch": 100,
+            "steps_per_epoch": 300,
             "epochs": 50,
             "anneal_strategy": "cos",
             "max_lr": 1e-2,
@@ -72,13 +72,13 @@
     "trainer": {
         "epochs": 100,
         "save_dir": "saved/",
-        "save_period": 5,
+        "save_period": 20,
         "verbosity": 2,
         "monitor": "min mel_spectrogram_loss_train",
         "early_stop": 500,
         "visualize": "wandb",
         "wandb_project": "hifigan_project",
-        "len_epoch": 100,
+        "len_epoch": 300,
         "grad_norm_clip": 50
     }
 }
