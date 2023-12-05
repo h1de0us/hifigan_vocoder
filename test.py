@@ -15,7 +15,7 @@ from src.utils.parse_config import ConfigParser
 
 from src.utils.preprocessing import MelSpectrogram, MelSpectrogramConfig
 
-DEFAULT_CHECKPOINT_PATH = ROOT_PATH / "default_test_model" / "checkpoint.pth"
+DEFAULT_CHECKPOINT_PATH = ROOT_PATH / "default_test_model" / "-"
 
 
 def main(config, out_file):
@@ -45,7 +45,7 @@ def main(config, out_file):
         mels = []
         for i in range(1, 4):
             path = ROOT_PATH / 'test_data' / f'audio_{i}.wav'
-            audio = Trainer._load_audio(path).detach().cpu()
+            audio = Trainer._load_audio(str(path)).detach().cpu()
             mels.append(melspec(audio))
 
         with torch.no_grad():
@@ -150,8 +150,8 @@ if __name__ == "__main__":
             }
         }
 
-    assert config.config.get("data", {}).get("test", None) is not None
-    config["data"]["test"]["batch_size"] = args.batch_size
-    config["data"]["test"]["n_jobs"] = args.jobs
+    # assert config.config.get("data", {}).get("test", None) is not None
+    # config["data"]["test"]["batch_size"] = args.batch_size
+    # config["data"]["test"]["n_jobs"] = args.jobs
 
     main(config, args.output)

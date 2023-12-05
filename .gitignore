@@ -114,3 +114,5 @@ __MACOSX/
 
 # dummy code
 main.ipynb
+# checkpoints
+*.pth

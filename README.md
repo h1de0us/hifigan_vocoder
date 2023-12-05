@@ -4,14 +4,22 @@
 To install all the dependencies, run
 
 ```shell
+cd hifigan-vocoder
 pip install -r ./requirements.txt
 ```
 To train a model, run
 ```
-python3 train.py -c configs/default.json
+python3 train.py -c src/configs/default.json
 ```
-P.S. Hydra-based config parser is on the way
-
+To download a checkpoint, run
+```
+python3 upload_model.py
+```
+To get audios for test texts, run
+```
+python3 test.py -r checkpoint.pth
+```
+The generated audios will appear in the folder "results".
 
 
 ## Credits
